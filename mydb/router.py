@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 from .util import import_module
 
+DEFAULT_DB_ALIAS = 'default'
+
 
 class ConnectionRouter(object):
     def __init__(self, routers):
@@ -24,7 +26,7 @@ class ConnectionRouter(object):
             self.routers.append(router)
 
     def _router_func(action):
-        def _route_db(self, model, **hints):
+        def _route_db(self, statement, **hints):
             chosen_db = None
             for router in self.routers:
                 try:
@@ -33,7 +35,7 @@ class ConnectionRouter(object):
                     # If the router doesn't have a method, skip to the next one.
                     pass
                 else:
-                    chosen_db = method(model, **hints)
+                    chosen_db = method(statement, **hints)
                     if chosen_db:
                         return chosen_db
             return DEFAULT_DB_ALIAS
