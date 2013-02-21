@@ -1,11 +1,11 @@
 from setuptools import setup, find_packages
 import os
-classifiers=[
-  "Programming Language :: Python",
-  'Environment :: Web Environment',
-  'Framework :: Flask',
-  'License :: OSI Approved :: BSD License',
-      ],
+classifiers = [
+    "Programming Language :: Python",
+    'Environment :: Web Environment',
+    'Framework :: Flask',
+    'License :: OSI Approved :: BSD License',
+]
 
 version = '0.1.0'
 README = open(os.path.join(os.path.dirname(__file__), 'README.rst')).read()
@@ -23,7 +23,7 @@ setup(name='mydb',
       packages=find_packages(exclude=['ez_setup']),
       include_package_data=True,
       test_suite='nose.collector',
-      tests_require=['Nose'],  
+      tests_require=['Nose'],
       zip_safe=False,
       install_requires=[
           'setuptools',
