@@ -5,5 +5,5 @@ mydb is a db wrapper for mysql.
 Links
 ===============================
 
-* `documentation <http://packages.python.org/mydb>`_
+* `documentation <http://pythonhosted.org/mydb>`_
 
