@@ -20,11 +20,11 @@ class TestRouter(unittest.TestCase):
         class MasterSlaveRouter(object):
             """Router that sends all reads to a slave, all writes to default."""
 
-            def db_for_read(self, model, **hints):
+            def db_for_read(self, statement, **hints):
                 """Send reads to slaves in round-robin."""
                 return get_slave()
 
-            def db_for_write(self, model, **hints):
+            def db_for_write(self, statement, **hints):
                 """Send all writes to the master."""
                 return conn1
 

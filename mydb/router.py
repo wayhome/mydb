@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 from .util import import_module
+from .pinning import this_thread_is_pinned
 
 DEFAULT_DB_ALIAS = 'default'
 
@@ -43,3 +44,36 @@ class ConnectionRouter(object):
 
     db_for_read = _router_func('db_for_read')
     db_for_write = _router_func('db_for_write')
+
+
+class MasterSlaveRouter(object):
+    """Router that sends all reads to a slave, all writes to default."""
+
+    def db_for_read(self, statement, **hints):
+        """Send reads to slaves in round-robin."""
+        return self.get_slave()
+
+    def db_for_write(self, statement, **hints):
+        """Send all writes to the master."""
+        return self.get_master()
+
+    def get_slave(self):
+        raise NotImplemented
+
+    def get_master(self):
+        raise NotImplemented
+
+
+class PinningMasterSlaveRouter(MasterSlaveRouter):
+    """Router that sends reads to master iff a certain flag is set. Writes
+    always go to master.
+
+    Typically, we set a cookie in middleware when the request is a POST and
+    give it a max age that's certain to be longer than the replication lag. The
+    flag comes from that cookie.
+
+    """
+    def db_for_read(self, statement, **hints):
+        """Send reads to slaves in round-robin unless this thread is "stuck" to
+        the master."""
+        return self.get_master() if this_thread_is_pinned() else self.get_slave()

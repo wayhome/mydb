@@ -7,3 +7,5 @@ dist
 develop-eggs/
 bin/
 .installed.cfg
+_build
+build
