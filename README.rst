@@ -7,3 +7,5 @@ Links
 
 * `documentation <http://pythonhosted.org/mydb>`_
 
+* `SouceCode at github <https://github.com/youngking/mydb>`_
+

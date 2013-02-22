@@ -29,9 +29,9 @@ Multiple Connection Like Master/Slave
         from mydb.router import ConnectionRouter
         from mydb.proxy import DBProxy
         router = ConnectionRouter(["myapp.somewhere.MasterSlaveRouter"])
-        proxy = DBProxy(router)
+        db = DBProxy(router)
 
-        for article in proxy.query("SELECT * FROM articles"):
+        for article in db.query("SELECT * FROM articles"):
             print article.title
 
 Database routers
