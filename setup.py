@@ -3,7 +3,6 @@ import os
 classifiers = [
     "Programming Language :: Python",
     'Environment :: Web Environment',
-    'Framework :: Flask',
     'License :: OSI Approved :: BSD License',
 ]
 
