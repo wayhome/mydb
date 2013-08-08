@@ -26,6 +26,7 @@ from __future__ import absolute_import, division, with_statement
 import copy
 import itertools
 import logging
+import os
 import time
 
 try:
@@ -34,9 +35,12 @@ try:
     import MySQLdb.cursors
 except ImportError:
     # If MySQLdb isn't available this module won't actually be useable,
-    # but we want it to at least be importable (mainly for readthedocs.org,
-    # which has limitations on third-party modules)
-    MySQLdb = None
+    # but we want it to at least be importable on readthedocs.org,
+    # which has limitations on third-party modules.
+    if 'READTHEDOCS' in os.environ:
+        MySQLdb = None
+    else:
+        raise
 
 from .url import parse_url
 
@@ -50,7 +54,7 @@ class Connection(object):
     The main value we provide is wrapping rows in a dict/object so that
     columns can be accessed by name. Typical usage::
 
-        db = database.Connection("mysql://youngking@localhost:13306/mydatabase")
+        db = database.Connection("localhost", "mydatabase")
         for article in db.query("SELECT * FROM articles"):
             print article.title
 
@@ -60,15 +64,14 @@ class Connection(object):
     We explicitly set the timezone to UTC and the character encoding to
     UTF-8 on all connections to avoid time zone and encoding errors.
     """
-    def __init__(self, dburi, max_idle_time=1800):
-
-        self.max_idle_time = max_idle_time
+    def __init__(self, dburi, connect_timeout=1, max_idle_time=1800, time_zone="+8:00"):
+        self.max_idle_time = float(max_idle_time)
 
         args = dict(conv=CONVERSIONS, use_unicode=True, charset="utf8",
-                    init_command='SET time_zone = "+8:00"',
-                    sql_mode="TRADITIONAL")
-
+                    init_command=('SET time_zone = "%s"' % time_zone),
+                    connect_timeout=connect_timeout, sql_mode="TRADITIONAL")
         url_dict = parse_url(dburi)
+
         if url_dict['user']:
             args['user'] = url_dict['user']
         if url_dict['passwd']:
@@ -78,6 +81,7 @@ class Connection(object):
         args['port'] = url_dict['port'] or 3306
 
         self.host = "{0}:{1}".format(args['host'], args['port'])
+
         self._db = None
         self._db_args = args
         self._last_use_time = time.time()
@@ -102,31 +106,31 @@ class Connection(object):
         self._db = MySQLdb.connect(**self._db_args)
         self._db.autocommit(True)
 
-    def iter(self, query, *parameters):
+    def iter(self, query, *parameters, **kwparameters):
         """Returns an iterator for the given query and parameters."""
         self._ensure_connected()
         cursor = MySQLdb.cursors.SSCursor(self._db)
         try:
-            self._execute(cursor, query, parameters)
+            self._execute(cursor, query, parameters, kwparameters)
             column_names = [d[0] for d in cursor.description]
             for row in cursor:
                 yield Row(zip(column_names, row))
         finally:
             cursor.close()
 
-    def query(self, query, *parameters):
+    def query(self, query, *parameters, **kwparameters):
         """Returns a row list for the given query and parameters."""
         cursor = self._cursor()
         try:
-            self._execute(cursor, query, parameters)
+            self._execute(cursor, query, parameters, kwparameters)
             column_names = [d[0] for d in cursor.description]
             return [Row(itertools.izip(column_names, row)) for row in cursor]
         finally:
             cursor.close()
 
-    def get(self, query, *parameters):
+    def get(self, query, *parameters, **kwparameters):
         """Returns the first row returned for the given query."""
-        rows = self.query(query, *parameters)
+        rows = self.query(query, *parameters, **kwparameters)
         if not rows:
             return None
         elif len(rows) > 1:
@@ -136,24 +140,24 @@ class Connection(object):
 
     # rowcount is a more reasonable default return value than lastrowid,
     # but for historical compatibility execute() must return lastrowid.
-    def execute(self, query, *parameters):
+    def execute(self, query, *parameters, **kwparameters):
         """Executes the given query, returning the lastrowid from the query."""
-        return self.execute_lastrowid(query, *parameters)
+        return self.execute_lastrowid(query, *parameters, **kwparameters)
 
-    def execute_lastrowid(self, query, *parameters):
+    def execute_lastrowid(self, query, *parameters, **kwparameters):
         """Executes the given query, returning the lastrowid from the query."""
         cursor = self._cursor()
         try:
-            self._execute(cursor, query, parameters)
+            self._execute(cursor, query, parameters, kwparameters)
             return cursor.lastrowid
         finally:
             cursor.close()
 
-    def execute_rowcount(self, query, *parameters):
+    def execute_rowcount(self, query, *parameters, **kwparameters):
         """Executes the given query, returning the rowcount from the query."""
         cursor = self._cursor()
         try:
-            self._execute(cursor, query, parameters)
+            self._execute(cursor, query, parameters, kwparameters)
             return cursor.rowcount
         finally:
             cursor.close()
@@ -189,14 +193,19 @@ class Connection(object):
         finally:
             cursor.close()
 
+    update = execute_rowcount
+    updatemany = executemany_rowcount
+
+    insert = execute_lastrowid
+    insertmany = executemany_lastrowid
+
     def _ensure_connected(self):
         # Mysql by default closes client connections that are idle for
         # 8 hours, but the client library does not report this fact until
         # you try to perform a query and it fails.  Protect against this
         # case by preemptively closing and reopening the connection
         # if it has been idle for too long (7 hours by default).
-        if (self._db is None or
-                (time.time() - self._last_use_time > self.max_idle_time)):
+        if (self._db is None or (time.time() - self._last_use_time > self.max_idle_time)):
             self.reconnect()
         self._last_use_time = time.time()
 
@@ -204,9 +213,9 @@ class Connection(object):
         self._ensure_connected()
         return self._db.cursor()
 
-    def _execute(self, cursor, query, parameters):
+    def _execute(self, cursor, query, parameters, kwparameters):
         try:
-            return cursor.execute(query, parameters)
+            return cursor.execute(query, kwparameters or parameters)
         except OperationalError:
             logging.error("Error connecting to MySQL on %s", self.host)
             self.close()
@@ -221,6 +230,23 @@ class Row(dict):
         except KeyError:
             raise AttributeError(name)
 
+
+class RoutedDB(object):
+
+    def __init__(self, master_conf, slaves_conf):
+        self.master = Connection(master_conf)
+        slaves = []
+        for slave_url in slaves_conf:
+            slaves.append(Connection(slave_url))
+        self.slaves = itertools.cycle(slaves)
+
+    def get_master(self):
+        return self.master
+
+    def get_slave(self):
+        return self.slaves.next()
+
+
 if MySQLdb is not None:
     # Fix the access conversions to properly recognize unicode/binary
     FIELD_TYPE = MySQLdb.constants.FIELD_TYPE
@@ -232,8 +258,7 @@ if MySQLdb is not None:
         field_types.append(FIELD_TYPE.VARCHAR)
 
     for field_type in field_types:
-        CONVERSIONS[field_type] = [(FLAG.BINARY, str)] + \
-            CONVERSIONS[field_type]
+        CONVERSIONS[field_type] = [(FLAG.BINARY, str)] + CONVERSIONS[field_type]
 
     # Alias some common MySQL exceptions
     IntegrityError = MySQLdb.IntegrityError

@@ -6,6 +6,10 @@ from .pinning import this_thread_is_pinned
 DEFAULT_DB_ALIAS = 'default'
 
 
+class ImproperlyConfigured(Exception):
+    pass
+
+
 class ConnectionRouter(object):
     def __init__(self, routers):
         self.routers = []
@@ -27,7 +31,7 @@ class ConnectionRouter(object):
             self.routers.append(router)
 
     def _router_func(action):
-        def _route_db(self, statement, **hints):
+        def _route_db(self, statement, *args, **kwargs):
             chosen_db = None
             for router in self.routers:
                 try:
@@ -36,7 +40,7 @@ class ConnectionRouter(object):
                     # If the router doesn't have a method, skip to the next one.
                     pass
                 else:
-                    chosen_db = method(statement, **hints)
+                    chosen_db = method(statement, *args, **kwargs)
                     if chosen_db:
                         return chosen_db
             return DEFAULT_DB_ALIAS
@@ -49,11 +53,11 @@ class ConnectionRouter(object):
 class MasterSlaveRouter(object):
     """Router that sends all reads to a slave, all writes to default."""
 
-    def db_for_read(self, statement, **hints):
+    def db_for_read(self, statement, *args, **kwargs):
         """Send reads to slaves in round-robin."""
         return self.get_slave()
 
-    def db_for_write(self, statement, **hints):
+    def db_for_write(self, statement, *args, **kwargs):
         """Send all writes to the master."""
         return self.get_master()
 
@@ -73,7 +77,7 @@ class PinningMasterSlaveRouter(MasterSlaveRouter):
     flag comes from that cookie.
 
     """
-    def db_for_read(self, statement, **hints):
+    def db_for_read(self, statement, *args, **kwargs):
         """Send reads to slaves in round-robin unless this thread is "stuck" to
         the master."""
         return self.get_master() if this_thread_is_pinned() else self.get_slave()

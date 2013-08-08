@@ -10,9 +10,9 @@ class DBProxy(object):
 
     def __wrap(self, method, statement, *args, **kwargs):
         if statement.strip().upper().startswith("SELECT"):
-            db = self.router.db_for_read(statement)
+            db = self.router.db_for_read(statement, *args, **kwargs)
         else:
-            db = self.router.db_for_write(statement)
+            db = self.router.db_for_write(statement, *args, **kwargs)
         f = getattr(db, method)
         return f(statement, *args, **kwargs)
 
