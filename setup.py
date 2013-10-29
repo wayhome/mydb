@@ -6,7 +6,7 @@ classifiers = [
     'License :: OSI Approved :: BSD License',
 ]
 
-version = '0.1.1'
+version = '0.1.2'
 README = open(os.path.join(os.path.dirname(__file__), 'README.rst')).read()
 
 setup(name='mydb',
@@ -17,7 +17,7 @@ setup(name='mydb',
       keywords='orm mysql',
       author='Young King',
       author_email='yanckin@gmail.com',
-      url='http://www.flyzen.com',
+      url='https://github.com/youngking/mydb',
       license='BSD',
       packages=find_packages(exclude=['ez_setup']),
       include_package_data=True,
